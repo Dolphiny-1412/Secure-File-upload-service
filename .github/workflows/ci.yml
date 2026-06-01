@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install top-level test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Generate demo files
+        run: |
+          bash scripts/demo_attack_files/generate_malicious_files.sh
+
+      - name: Create .env
+        run: |
+          echo "SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(32))')" >> .env
+          echo "MAX_UPLOAD_SIZE=5242880" >> .env
+          echo "TOKEN_EXP_SECONDS=300" >> .env
+          echo "RATE_LIMIT_REQUESTS=50" >> .env
+          echo "RATE_LIMIT_WINDOW_SECONDS=60" >> .env
+          echo "CLAMD_HOST=" >> .env
+
+      - name: Validate docker-compose.yml
+        run: docker compose config
+
+      - name: Start services
+        run: |
+          python start_services.py &
+          sleep 10
+
+      - name: Wait for services
+        run: |
+          for i in {1..60}; do curl -fsS http://localhost:8001/ && break || sleep 2; done
+          for i in {1..120}; do curl -fsS http://localhost:8000/ && break || sleep 2; done
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Basic curl security checks
+        run: |
+          set -e
+          # Vulnerable should allow direct static access after upload
+          curl -F "file=@scripts/demo_attack_files/malicious_samples/php_shell_disguised.jpg" http://localhost:8001/upload
+          curl -fsS http://localhost:8001/uploads/php_shell_disguised.jpg | grep -q pwned
+          # Hardened should reject or quarantine
+          code=$(curl -s -o /dev/null -w "%{http_code}" -F "file=@scripts/demo_attack_files/malicious_samples/php_shell_disguised.jpg" http://localhost:8000/upload)
+          if [ "$code" -ne 415 ] && [ "$code" -ne 451 ] && [ "$code" -ne 503 ]; then
+            echo "Hardened did not block malicious upload (status $code)"; exit 1; fi
+
+      - name: Run test harness report
+        if: always()
+        run: python tests/test_harness.py || true
+
+      - name: Upload artifacts
+        if: hashFiles('compose.log', 'report.txt') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-and-report
+          path: |
+            compose.log
+            report.txt
+          if-no-files-found: ignore
+
+      - name: Tear down
+        if: always()
+        run: |
+          pkill -f "python start_services.py" || true
+          pkill -f "uvicorn" || true
+          pkill -f "streamlit" || true
+
+

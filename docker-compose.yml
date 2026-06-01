@@ -1,0 +1,48 @@
+services:
+  clamav:
+    image: mk0x/docker-clamav:latest
+    ports:
+      - "3310:3310"
+    profiles:
+      - with-clamav
+
+  vulnerable-service:
+    build: .
+    command: python -m uvicorn vulnerable_service.app.main:app --host 0.0.0.0 --port 8001
+    ports:
+      - "8001:8001"
+    volumes:
+      - vulnerable_uploads:/app/vulnerable_service/webroot/uploads
+
+  hardened-service:
+    build: .
+    command: python -m uvicorn hardened_service.app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      CLAMAV_HOST: ${CLAMAV_HOST:-}
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+    volumes:
+      - hardened_data:/app/data
+    depends_on:
+      - vulnerable-service
+
+  streamlit-ui:
+    build: .
+    command: python -m streamlit run streamlit_service/app/main.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    environment:
+      VULN_BASE_URL: http://vulnerable-service:8001
+      HARD_BASE_URL: http://hardened-service:8000
+    depends_on:
+      - vulnerable-service
+      - hardened-service
+
+volumes:
+  hardened_data:
+  vulnerable_uploads:

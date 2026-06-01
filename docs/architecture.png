@@ -1,0 +1,6 @@
+[Placeholder diagram]
+Vulnerable service -> webroot/uploads (public)
+Hardened service -> /data/storage (private), SQLite metadata, ClamAV scan, signed tokens
+ClamAV (clamd) <-> Hardened service
+
+

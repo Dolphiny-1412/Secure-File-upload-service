@@ -1,0 +1,17 @@
+Vulnerable: Stores user files under webroot with original names; no checks.
+Hardened: Stores outside webroot (data/storage) with randomized names; metadata in SQLite.
+
+Vulnerable: Accepts any content type and extension.
+Hardened: Extension whitelist (png, jpg/jpeg, pdf) and python-magic sniffing. Pillow verifies images; PyPDF2 validates PDFs.
+
+Vulnerable: No size limits.
+Hardened: Enforces configurable max size (default 5 MB); rejects with 413.
+
+Vulnerable: No malware scanning.
+Hardened: Scans via clamd (pyclamd) if available; infected files quarantined (returns 451). Gracefully handles missing ClamAV.
+
+Vulnerable: Direct static serving; no auth.
+Hardened: Signed temporary tokens (HMAC-SHA256) required for downloads; secure headers.
+
+Vulnerable: No rate limiting or structured logging.
+Hardened: Per-IP rate limiting; structured logging; explicit JSON error handling.
