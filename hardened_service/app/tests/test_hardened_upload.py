@@ -31,11 +31,55 @@ def sign_token(file_id: str, exp_seconds: int = 300) -> str:
     return token
 
 
+import base64
+import hmac
+import hashlib
+import io
+import json
+import os
+import time
+import requests
+import pytest
+from PIL import Image
+
+BASE = os.environ.get("HARD_BASE_URL", "http://localhost:8000")
+SECRET = os.environ.get("SECRET_KEY", "change-me")
+
+_MINIMAL_PDF = """%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>
+endobj
+xref
+0 4
+0000000000 65535 f 
+0000000010 00000 n 
+0000000061 00000 n 
+0000000120 00000 n 
+trailer
+<< /Size 4 /Root 1 0 R >>
+startxref
+180
+%%EOF
+"""
+
+
+def _make_sample_jpeg() -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", (1, 1), color=(255, 0, 0)).save(buf, format="JPEG")
+    return buf.getvalue()
+
+
 @pytest.fixture(scope="module")
 def samples(tmp_path_factory):
     d = tmp_path_factory.mktemp("samples")
-    (d / "sample.jpg").write_bytes(b"\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xFF\xD9")
-    (d / "sample.pdf").write_text("%PDF-1.4\n%EOF\n")
+    (d / "sample.jpg").write_bytes(_make_sample_jpeg())
+    (d / "sample.pdf").write_text(_MINIMAL_PDF)
     (d / "php_shell_disguised.jpg").write_text("<?php echo 'pwned'; ?>")
     return d
 

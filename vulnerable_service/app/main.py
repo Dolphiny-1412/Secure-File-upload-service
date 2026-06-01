@@ -12,9 +12,6 @@ WEBROOT = os.path.join(os.path.dirname(__file__), "..", "webroot")
 UPLOAD_DIR = os.path.abspath(os.path.join(WEBROOT, "uploads"))
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# Serve the entire webroot statically at root (intentionally insecure)
-app.mount("/", StaticFiles(directory=WEBROOT, html=True), name="static")
-
 
 @app.post("/upload")
 async def upload(file: UploadFile = File(...), uploader_id: Optional[str] = Form(None)):
@@ -45,4 +42,8 @@ def index():
         media_type="text/html",
     )
 
+
+# Serve the entire webroot statically at root (intentionally insecure)
+# Registered after API routes so POST /upload is not shadowed by StaticFiles (405).
+app.mount("/", StaticFiles(directory=WEBROOT, html=True), name="static")
 
